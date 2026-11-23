@@ -89,3 +89,45 @@ sudo rm -rf /srv/projects/shared
 - bob could not append to a file created by kane (`>> k.txt` gave
   Permission denied) even though the group and ACL looked correct.
   Cause not yet found. Investigate later.
+
+## Phase 3: Limited sudo for the ops group
+
+**Purpose:** let members of `ops` restart the cron service, and nothing else.
+**Run as:** a normal admin user with sudo.
+
+### Procedure
+```bash
+sudo visudo -f /etc/sudoers.d/ops
+```
+Add this single line, then save:
+```
+%ops ALL=(root) /usr/bin/systemctl restart cron
+```
+`visudo` checks the syntax before saving and sets the file to
+owner root, mode 0440.
+
+### Verification
+```bash
+sudo visudo -c                   # /etc/sudoers.d/ops: parsed OK
+sudo -l -U kane                  # lists only: (root) /usr/bin/systemctl restart cron
+sudo -l -U alice                 # not allowed to run sudo
+sudo -iu kane
+sudo systemctl restart cron      # works, exit status 0
+sudo systemctl stop cron         # refused
+sudo cat /etc/shadow             # refused
+sudo -i                          # refused
+```
+
+### Rollback
+```bash
+sudo rm /etc/sudoers.d/ops
+sudo visudo -c
+```
+
+### Notes
+- Rules name the exact command with its full path.
+- Never allow editors (vim), shells, less or wildcards in sudo rules:
+  they can launch a shell and give full root access.
+- Files in /etc/sudoers.d/ whose names contain a "." are silently ignored.
+- Sudo denies by default: only commands named in a rule can run.
+- Every attempt, allowed or refused, is logged (journalctl _COMM=sudo).
