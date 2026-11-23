@@ -51,4 +51,41 @@ command : sudo useradd -r -s /usr/sbin/nologin svc-backup
 verification: getent passwd svc-backup      # shell should be /usr/sbin/nologin
 sudo su - svc-backup          # should print: This account is currently not available.
 
+## Phase 2: Shared project directory
 
+**Purpose:** a folder where `devs` collaborate, files inherit the group,
+and users cannot delete each other's files.
+**Run as:** a normal admin user with sudo.
+
+### Procedure
+```bash
+sudo mkdir -p /srv/projects/shared
+sudo chown root:devs /srv/projects/shared
+sudo chmod 3770 /srv/projects/shared
+sudo apt install acl
+sudo setfacl -d -m g:devs:rwx /srv/projects/shared
+```
+
+### Verification
+```bash
+ls -ld /srv/projects/shared          # drwxrws--T+
+getfacl /srv/projects/shared         # default:group:devs:rwx
+sudo -iu kane bash -c 'touch /srv/projects/shared/k.txt; ls -l /srv/projects/shared/k.txt'   # group devs
+sudo -iu bob bash -c 'rm -f /srv/projects/shared/k.txt'   # Operation not permitted (sticky bit)
+sudo -iu nice bash -c 'cd /srv/projects/shared'           # Permission denied (others have no access)
+```
+
+### Rollback
+```bash
+sudo rm -rf /srv/projects/shared
+```
+
+### Notes
+- setgid (`s`): new files inherit the directory's group.
+- sticky bit (`T`): only the owner of a file can delete it.
+- Default umask 022 gave group read-only files, which is why the default ACL was added.
+
+### Known issue
+- bob could not append to a file created by kane (`>> k.txt` gave
+  Permission denied) even though the group and ACL looked correct.
+  Cause not yet found. Investigate later.
