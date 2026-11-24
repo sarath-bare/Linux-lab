@@ -131,3 +131,64 @@ sudo visudo -c
 - Files in /etc/sudoers.d/ whose names contain a "." are silently ignored.
 - Sudo denies by default: only commands named in a rule can run.
 - Every attempt, allowed or refused, is logged (journalctl _COMM=sudo).
+
+## Phase 4: Service accounts and password aging
+
+### 4a. Service account
+
+**Purpose:** an account for running a program (for example a backup job)
+that nobody can log in to interactively.
+
+#### Procedure
+```bash
+sudo useradd -r -s /usr/sbin/nologin svc-backup
+```
+
+#### Verification
+```bash
+getent passwd svc-backup          # UID below 1000, shell /usr/sbin/nologin
+ls -ld /home/svc-backup           # no such directory (-r creates no home)
+sudo -u svc-backup whoami         # works: prints svc-backup
+sudo -iu svc-backup               # refused: This account is currently not available.
+```
+
+#### Rollback
+```bash
+sudo userdel svc-backup
+```
+
+#### Notes
+- `-r` creates a system account (UID below 1000, no home directory).
+- `nologin` blocks interactive logins (su, ssh, console) but not programs
+  running as the account. `sudo -u svc-backup <command>` still works,
+  so access to sudo itself must be controlled.
+- UID ranges: 0 root, 1-999 system and service accounts, 1000 and up people.
+
+### 4b. Password aging with chage
+
+**Purpose:** enforce password expiry rules and control account lifetime.
+
+#### Procedure
+```bash
+sudo chage -d 0 <user>            # force a password change at next login
+sudo chage -M 90 -m 1 -W 14 <user>  # max 90 days, min 1 day, warn 14 days
+sudo chage -E 2026-12-31 <user>   # account itself expires on this date
+sudo chage -E -1 <user>           # remove the account expiry
+```
+
+#### Verification
+```bash
+sudo chage -l <user>
+sudo passwd -S <user>             # L = locked, P = usable password
+```
+
+#### Rollback
+```bash
+sudo chage -M 99999 -m 0 -W 7 -E -1 <user>   # back to the defaults
+```
+
+#### Notes
+- Password expiry (user must change it) is different from account expiry
+  (no login at all). Contractor accounts usually get an account expiry date.
+- `passwd -l` locks the password. `passwd -u` unlocks it.
+- A lab test: password set 2026-11-23 with `-M 90` expired on 2027-02-21.
