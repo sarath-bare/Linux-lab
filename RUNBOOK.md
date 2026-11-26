@@ -203,4 +203,91 @@ sudo chage -M 99999 -m 0 -W 7 -E -1 <user>   # back to the defaults
 - A lab test: password set 2026-11-23 with `-M 90` expired on 2027-02-21.
 
 
+## Phase 5: umask, ACLs and SSH config
 
+### 5a. umask
+
+**Purpose:** control default permissions of new files and directories.
+
+#### Procedure
+```bash
+umask            # show current value
+umask 027        # this shell only
+```
+
+#### Verification
+```bash
+touch f; mkdir d; ls -ld f d     # umask 027: f is 640, d is 750
+```
+
+#### Rollback
+```bash
+umask 002        # or open a new terminal
+```
+
+#### Notes
+- Files start from 666, directories from 777; umask removes bits.
+- It is bit removal, not subtraction: umask 033 on a file gives 644.
+- Ubuntu uses 002 when the primary group is a private group named after
+  the user, otherwise 022.
+
+### 5b. ACLs
+
+**Purpose:** give extra users or groups access to one file or directory.
+
+#### Procedure
+```bash
+sudo apt install acl
+setfacl -m u:alice:rw file
+setfacl -d -m g:devs:rwx dir     # default ACL, inherited by new files
+```
+
+#### Verification
+```bash
+getfacl file                     # read the #effective comments
+ls -l file                       # + after the permissions
+```
+
+#### Rollback
+```bash
+setfacl -x u:alice file          # remove one entry
+setfacl -b file                  # remove all entries; then re-check ls -l
+```
+
+#### Notes
+- The mask caps named users and the group. `chmod` on a file with an ACL
+  changes the mask: after `chmod 600`, alice showed #effective:---.
+- After `setfacl -b`, the group entry becomes the real group permission
+  again, so check `ls -l` and chmod again if needed.
+
+### 5c. SSH config alias
+
+**Purpose:** pick the right key per host or account.
+
+#### Procedure
+```bash
+vi ~/.ssh/config
+chmod 600 ~/.ssh/config
+```
+Config block:
+```
+Host github-lab
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+```
+
+#### Verification
+```bash
+ssh -T git@github-lab            # Hi <username>! You've successfully authenticated
+```
+
+#### Rollback
+Remove the Host block from ~/.ssh/config.
+
+#### Notes
+- With two accounts, create one Host block and one key per account.
+- IdentitiesOnly stops SSH offering every key in the agent.
+- Login shells need a ~/.profile that sources ~/.bashrc, or keychain
+  in .bashrc never runs.
