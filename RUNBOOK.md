@@ -105,7 +105,16 @@ Add this single line, then save:
 ```
 `visudo` checks the syntax before saving and sets the file to
 owner root, mode 0440.
-
+### Known issue (resolved)
+- A group member could not append to another member's file with `>>`,
+  even though group, ACL and mask allowed it.
+- Cause: kernel setting `fs.protected_regular=2` blocks opening
+  (with O_CREAT) someone else's file in a sticky directory that is
+  group- or world-writable. `>>` always opens with O_CREAT.
+- Evidence: `dd ... conv=notrunc,nocreat` (no O_CREAT) succeeded as the
+  same user; setting `fs.protected_regular=1` made `>>` succeed.
+- Options: keep the hardening, drop the sticky bit on the folder, or lower
+  the setting (weakens protection for the whole host; needs review).
 ### Verification
 ```bash
 sudo visudo -c                   # /etc/sudoers.d/ops: parsed OK
@@ -192,3 +201,6 @@ sudo chage -M 99999 -m 0 -W 7 -E -1 <user>   # back to the defaults
   (no login at all). Contractor accounts usually get an account expiry date.
 - `passwd -l` locks the password. `passwd -u` unlocks it.
 - A lab test: password set 2026-11-23 with `-M 90` expired on 2027-02-21.
+
+
+
